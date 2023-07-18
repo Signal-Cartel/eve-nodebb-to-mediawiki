@@ -1,0 +1,25 @@
+{
+  "name": "eve-nodebb-to-mediawiki",
+  "version": "1.0.0",
+  "description": "Migrate NodeBB Forums to MediaWiki Archive",
+  "main": "src/main.js",
+  "author": "Sky Diamond",
+  "format": "prettier --check .",
+  "format:fix": "prettier --write .",
+  "scripts": {
+    "format": "prettier --check .",
+    "format:fix": "prettier --write .",
+    "start": "npx ts-node src/main.ts"
+  },
+  "devDependencies": {
+    "@types/mongodb": "^4.0.7",
+    "@types/node": "^20.4.1",
+    "prettier": "^3.0.0",
+    "typescript": "^5.1.6"
+  },
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "mongodb": "^5.7.0",
+    "ts-node": "^10.9.1"
+  }
+}
