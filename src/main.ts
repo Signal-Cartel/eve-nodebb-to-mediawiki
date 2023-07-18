@@ -38,19 +38,27 @@ async function main() {
 
     //  .find({ _key: { $regex: /^collection:/ } })
     // Find all categories
-    const categories = await collection
+    await collection
       .find({ _key: { $regex: /^category:/ } })
-      .toArray();
+      .toArray()
+      .then((categories) => {
+        console.log("categories:");
+        categories.forEach(async (obj) => {
+          if (inactiveCategories.includes(obj.cid)) {
+            // Skip to the next object
+            return;
+          }
+          console.log(`${obj.cid}: ${obj.name}`);
 
-    console.log("categories:");
-    categories.sort((a, b) => a.cid - b.cid);
-    categories.forEach((obj) => {
-      if (inactiveCategories.includes(obj.cid)) {
-        // Skip to the next object
-        return;
-      }
-      console.log(`${obj.cid}: ${obj.name}`);
-    });
+          // Find all topics
+          await collection
+            .find({ cid: { $eq: obj.cid }, _key: { $regex: /^topic:/ } })
+            .toArray()
+            .then(async (topics) => {
+              console.log(topics);
+            });
+        });
+      });
   } finally {
     // Ensures that the client will close when you finish/error
     await client.close();
