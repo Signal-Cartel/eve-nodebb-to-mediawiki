@@ -1,13 +1,60 @@
-import { Collection, MongoClient } from "mongodb";
+import * as fs from "fs";
 import dotenv from "dotenv";
+import { Collection, MongoClient } from "mongodb";
+import xmlEscape from "xml-escape";
+
+// nodebb documentation
+// https://docs.nodebb.org/development/database-structure/
+
+// mediawiki documentation
+// https://www.mediawiki.org/wiki/Help:Export
 
 const DB_NAME = "nodebb";
 const DB_COLLECTION_CATEGORIES = "objects";
+const exportBase = "./data";
 
-const inactiveCategories = [5, 12, 21, 33, 41, 43, 44, 37, 46, 31, 18, 34, 40];
+const inactiveCategories = [
+  5, 9, 12, 15, 21, 33, 41, 43, 44, 37, 46, 31, 18, 34, 40,
+];
+const mediaWikiNamespace = new Map<number, number>();
 
 async function main() {
   dotenv.config();
+
+  // initialize the mapping from category id to mediawiki namespace
+  mediaWikiNamespace.set(1, 120);
+  mediaWikiNamespace.set(2, 120);
+  mediaWikiNamespace.set(6, 120);
+  mediaWikiNamespace.set(7, 120);
+  mediaWikiNamespace.set(10, 120);
+  mediaWikiNamespace.set(11, 120);
+  mediaWikiNamespace.set(13, 120);
+  mediaWikiNamespace.set(14, 120);
+  mediaWikiNamespace.set(16, 120);
+  mediaWikiNamespace.set(17, 120);
+  mediaWikiNamespace.set(19, 120);
+  mediaWikiNamespace.set(20, 120);
+  mediaWikiNamespace.set(22, 120);
+  mediaWikiNamespace.set(23, 120);
+  mediaWikiNamespace.set(24, 120);
+  mediaWikiNamespace.set(25, 120);
+  mediaWikiNamespace.set(26, 120);
+  mediaWikiNamespace.set(27, 120);
+  mediaWikiNamespace.set(28, 120);
+  mediaWikiNamespace.set(29, 120);
+  mediaWikiNamespace.set(30, 120);
+  mediaWikiNamespace.set(32, 120);
+  mediaWikiNamespace.set(35, 120);
+  mediaWikiNamespace.set(36, 120);
+  mediaWikiNamespace.set(38, 120);
+  mediaWikiNamespace.set(39, 120);
+  mediaWikiNamespace.set(42, 120);
+  mediaWikiNamespace.set(45, 120);
+
+  if (!fs.existsSync(exportBase)) {
+    console.log(`ERROR: Directory ${exportBase} does not exist.`);
+    process.exit(1);
+  }
 
   const uri = process.env.MONGODB_URI;
   if (uri == undefined) {
@@ -21,7 +68,9 @@ async function main() {
 
     const db = client.db(DB_NAME);
     const userCollection: Collection = db.collection(DB_COLLECTION_CATEGORIES);
-    const categoryCollection: Collection = db.collection(DB_COLLECTION_CATEGORIES);
+    const categoryCollection: Collection = db.collection(
+      DB_COLLECTION_CATEGORIES,
+    );
     const topicCollection: Collection = db.collection(DB_COLLECTION_CATEGORIES);
     const postCollection: Collection = db.collection(DB_COLLECTION_CATEGORIES);
 
@@ -60,6 +109,21 @@ async function main() {
       }
       console.log(`${category.cid}: ${category.name}`);
 
+      let writeStream = fs.createWriteStream(
+        `${exportBase}/${category.cid}.xml`,
+        { encoding: "utf8" },
+      );
+
+      writeStream.write('<mediawiki xml:lang="en">\n');
+      const namespaceId = mediaWikiNamespace.get(category.cid);
+      if (!namespaceId) {
+        console.log(
+          `ERROR: namespace for category id ${category.cid} is not defined.`,
+        );
+        console.log(category);
+        process.exit(1);
+      }
+
       // Find all topics
       const topics = await topicCollection
         .find({ cid: { $eq: category.cid }, _key: { $regex: /^topic:/ } })
@@ -68,15 +132,45 @@ async function main() {
       for (const topic of topics) {
         console.log(`  - Topic: ${topic.title}`);
 
+        const tsTopic = new Date(topic.timestamp).toISOString();
+        const username = userCache[topic.uid].username;
+        let content = "";
+
+        writeStream.write("  <page>\n");
+        writeStream.write(`    <title>${topic.title}</title>\n`);
+        writeStream.write(`    <ns>${namespaceId}</ns>\n`);
+        writeStream.write(`    <revision>\n`);
+        writeStream.write(`      <timestamp>${tsTopic}</timestamp>\n`);
+        writeStream.write(
+          `      <contributor><username>${username}</username></contributor>\n`,
+        );
         // Find all posts
         const posts = await postCollection
-          .find({ tid: { $eq: topic.tid }, _key: { $regex: /^post:/ } })
+          .find({
+            tid: { $eq: topic.tid },
+            _key: { $regex: /^post:/ },
+            deleted: { $eq: 0 },
+          })
           .sort({ timestamp: 1 })
           .toArray();
         for (const post of posts) {
-          console.log(`    - Post: ${userCache[post.uid].username}`);
+          const tsPost = new Date(post.timestamp).toISOString();
+
+          content += `'''${userCache[post.uid].username}''' ${tsPost}\n`;
+          content += `${post.content}\n`;
+          content += "----\n";
         }
+
+        content += `''https://forums.eve-scout.com/topic/${topic.slug}''\n`;
+
+        content = xmlEscape(content);
+        writeStream.write(`      <text>${content}</text>\n`);
+        writeStream.write("    </revision>\n");
+        writeStream.write("  </page>\n");
       }
+
+      writeStream.write("</mediawiki>\n");
+      writeStream.end();
     }
   } finally {
     // Ensures that the client will close when you finish/error
