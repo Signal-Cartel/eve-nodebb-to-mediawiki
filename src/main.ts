@@ -97,6 +97,12 @@ async function main() {
       userCache[user.uid] = user;
     }
 
+    // we gather all content in one file for experimenting with markdown conversion
+    let writeContent = fs.createWriteStream(
+      `${exportBase}/content.txt`,
+      { encoding: "utf8" },
+    );
+
     // Find all categories
     console.log("categories:");
     const categories = await categoryCollection
@@ -109,12 +115,12 @@ async function main() {
       }
       console.log(`${category.cid}: ${category.name}`);
 
-      let writeStream = fs.createWriteStream(
+      let writeXml = fs.createWriteStream(
         `${exportBase}/${category.cid}.xml`,
         { encoding: "utf8" },
       );
 
-      writeStream.write('<mediawiki xml:lang="en">\n');
+      writeXml.write('<mediawiki xml:lang="en">\n');
       const namespaceId = mediaWikiNamespace.get(category.cid);
       if (!namespaceId) {
         console.log(
@@ -136,12 +142,12 @@ async function main() {
         const username = userCache[topic.uid].username;
         let content = "";
 
-        writeStream.write("  <page>\n");
-        writeStream.write(`    <title>${topic.title}</title>\n`);
-        writeStream.write(`    <ns>${namespaceId}</ns>\n`);
-        writeStream.write(`    <revision>\n`);
-        writeStream.write(`      <timestamp>${tsTopic}</timestamp>\n`);
-        writeStream.write(
+        writeXml.write("  <page>\n");
+        writeXml.write(`    <title>${topic.title}</title>\n`);
+        writeXml.write(`    <ns>${namespaceId}</ns>\n`);
+        writeXml.write(`    <revision>\n`);
+        writeXml.write(`      <timestamp>${tsTopic}</timestamp>\n`);
+        writeXml.write(
           `      <contributor><username>${username}</username></contributor>\n`,
         );
         // Find all posts
@@ -163,15 +169,19 @@ async function main() {
 
         content += `''https://forums.eve-scout.com/topic/${topic.slug}''\n`;
 
+        writeContent.write(`== TOPIC: ${topic.title} ==\n${content}\n----\n----\n\n\n\n`);
+
         content = xmlEscape(content);
-        writeStream.write(`      <text>${content}</text>\n`);
-        writeStream.write("    </revision>\n");
-        writeStream.write("  </page>\n");
+        writeXml.write(`      <text>${content}</text>\n`);
+        writeXml.write("    </revision>\n");
+        writeXml.write("  </page>\n");
       }
 
-      writeStream.write("</mediawiki>\n");
-      writeStream.end();
+      writeXml.write("</mediawiki>\n");
+      writeXml.end();
     }
+
+    writeContent.end();
   } finally {
     // Ensures that the client will close when you finish/error
     await client.close();
