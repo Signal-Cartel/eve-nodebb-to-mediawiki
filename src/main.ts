@@ -13,6 +13,9 @@ const DB_NAME = "nodebb";
 const DB_COLLECTION_CATEGORIES = "objects";
 const exportBase = "./data";
 
+const topicMigrated =
+  "This forum post was migrated to the Signal Cartel Wiki and can be found via this link";
+
 const inactiveCategories = [
   5, 9, 12, 15, 21, 33, 41, 43, 44, 37, 46, 31, 18, 34, 40,
 ];
@@ -98,10 +101,9 @@ async function main() {
     }
 
     // we gather all content in one file for experimenting with markdown conversion
-    let writeContent = fs.createWriteStream(
-      `${exportBase}/content.txt`,
-      { encoding: "utf8" },
-    );
+    let writeContent = fs.createWriteStream(`${exportBase}/content.txt`, {
+      encoding: "utf8",
+    });
 
     // Find all categories
     console.log("categories:");
@@ -115,10 +117,9 @@ async function main() {
       }
       console.log(`${category.cid}: ${category.name}`);
 
-      let writeXml = fs.createWriteStream(
-        `${exportBase}/${category.cid}.xml`,
-        { encoding: "utf8" },
-      );
+      let writeXml = fs.createWriteStream(`${exportBase}/${category.cid}.xml`, {
+        encoding: "utf8",
+      });
 
       writeXml.write('<mediawiki xml:lang="en">\n');
       const namespaceId = mediaWikiNamespace.get(category.cid);
@@ -142,14 +143,13 @@ async function main() {
         const username = userCache[topic.uid].username;
         let content = "";
 
-        writeXml.write("  <page>\n");
-        writeXml.write(`    <title>${topic.title}</title>\n`);
-        writeXml.write(`    <ns>${namespaceId}</ns>\n`);
-        writeXml.write(`    <revision>\n`);
-        writeXml.write(`      <timestamp>${tsTopic}</timestamp>\n`);
-        writeXml.write(
-          `      <contributor><username>${username}</username></contributor>\n`,
-        );
+        let page = `  <page>\n`;
+        page += `    <title>${topic.title}</title>\n`;
+        page += `    <ns>${namespaceId}</ns>\n`;
+        page += `    <revision>\n`;
+        page += `      <timestamp>${tsTopic}</timestamp>\n`;
+        page += `      <contributor><username>${username}</username></contributor>\n`;
+
         // Find all posts
         const posts = await postCollection
           .find({
@@ -169,12 +169,19 @@ async function main() {
 
         content += `''https://forums.eve-scout.com/topic/${topic.slug}''\n`;
 
-        writeContent.write(`== TOPIC: ${topic.title} ==\n${content}\n----\n----\n\n\n\n`);
+        const xmlContent = xmlEscape(content);
+        page += `      <text>${xmlContent}</text>\n`;
+        page += `    </revision>\n`;
+        page += `  </page>\n`;
 
-        content = xmlEscape(content);
-        writeXml.write(`      <text>${content}</text>\n`);
-        writeXml.write("    </revision>\n");
-        writeXml.write("  </page>\n");
+        if (!page.includes(topicMigrated)) {
+          writeContent.write(
+            `== TOPIC: ${topic.title} ==\n${content}\n----\n----\n\n\n\n`,
+          );
+          writeXml.write(page);
+        } else {
+          console.log("    SKIP!");
+        }
       }
 
       writeXml.write("</mediawiki>\n");
