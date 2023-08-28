@@ -21,6 +21,43 @@ const inactiveCategories = [
 ];
 const mediaWikiNamespace = new Map<number, number>();
 
+function nodebbToWikiMarkup(nodeBBString: string) {
+  // Replacements array with regex patterns and their replacement strings.
+  // The order of the patterns is important, otherwise headlines and enumerations collide!
+  const replacements = [
+    { pattern: /^# (.*?)$/gm, replace: "== $1 ==" }, // Header 1
+    { pattern: /^(.*?)\n=\n/gm, replace: "== $1 ==\n" },
+    { pattern: /^## (.*?)$/gm, replace: "=== $1 ===" }, // Header 2
+    { pattern: /^(.*?)\n==\n/gm, replace: "=== $1 ===\n" },
+    { pattern: /^### (.*?)$/gm, replace: "==== $1 ====" }, // Header 3
+    { pattern: /^(.*?)\n===\n/gm, replace: "==== $1 ====\n" },
+    { pattern: /^#### (.*?)$/gm, replace: "===== $1 =====" }, // Header 4
+    { pattern: /^(.*?)\n====\n/gm, replace: "===== $1 =====\n" },
+    { pattern: /^##### (.*?)$/gm, replace: "====== $1 ======" }, // Header 5
+    { pattern: /^(.*?)\n=====\n/gm, replace: "====== $1 ======\n" },
+    { pattern: /^> (.*?)$/gm, replace: "<blockquote>$1</blockquote>" }, // Blockquote
+    { pattern: /^---$/gm, replace: "----" }, // Horizontal rule 1
+    { pattern: /^\*\*\*$/gm, replace: "----" }, // Horizontal rule 2
+    { pattern: /\*\*(.*?)\*\*/g, replace: "'''$1'''" }, // Bold
+    { pattern: /\*(.*?)\*/g, replace: "''$1''" }, // Italics
+    { pattern: /~~(.*?)~~/g, replace: "<s>$1</s>" }, // Strikethrough
+    { pattern: /^\* (.*?)$/gm, replace: "* $1" }, // List 1
+    { pattern: /^- (.*?)$/gm, replace: "* $1" }, // List 2
+    { pattern: /^\d+\. (.*?)$/gm, replace: "# $1" }, // Number list 1
+    { pattern: /^\d+\) (.*?)$/gm, replace: "# $1" }, // Number list 2
+    { pattern: /```([\s\S]*?)```/g, replace: "<pre>$1</pre>" }, // Code block
+    { pattern: /`(.*?)`/g, replace: "<code>$1</code>" }, // Inline code
+    { pattern: /\[(.*?)\]\((.*?)\)/g, replace: "[$2 $1]" }, // Link
+  ];
+
+  let mediaWikiString = nodeBBString;
+  for (const { pattern, replace } of replacements) {
+    mediaWikiString = mediaWikiString.replace(pattern, replace);
+  }
+
+  return xmlEscape(mediaWikiString);
+}
+
 async function main() {
   dotenv.config();
 
@@ -169,7 +206,7 @@ async function main() {
 
         content += `''https://forums.eve-scout.com/topic/${topic.slug}''\n`;
 
-        const xmlContent = xmlEscape(content);
+        const xmlContent = nodebbToWikiMarkup(content);
         page += `      <text>${xmlContent}</text>\n`;
         page += `    </revision>\n`;
         page += `  </page>\n`;
